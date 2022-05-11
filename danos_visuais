@@ -1,0 +1,98 @@
+library(sf)
+
+
+# lendo arquivos ----------------------------------------------------------
+
+patios <- sf::read_sf("Patio.shp")
+primarias <- sf::read_sf("Estrada_Primaria.shp")
+secundarias <- sf::read_sf("Secundaria.shp")
+trilhas <- sf::read_sf("Trilhas_Arraste.shp")
+
+
+# buffer ------------------------------------------------------------------
+
+primarias_buffer <- sf::st_buffer(primarias, dist = 4)
+secundarias_buffer <- sf::st_buffer(secundarias, dist = 3)
+trilhas_buffer <- sf::st_buffer(trilhas, dist = 2)
+
+# recortando  -------------------------------------------------------------
+
+st_erase = function(x, y) sf::st_difference(x, sf::st_union(y))
+
+
+st_crs(trilhas_buffer)== sf::st_crs(primarias_buffer)
+st_crs(trilhas_buffer) == sf::st_crs(patios)
+st_crs(trilhas_buffer) == sf::st_crs(secundarias_buffer)
+
+primarias_clip <- st_erase(primarias_buffer$geometry, patios$geometry)
+primarias_clip <- sf::st_union(primarias_clip)
+
+secundarias_clip <- st_erase(secundarias_buffer$geometry, patios$geometry)
+secundarias_clip <- st_erase(secundarias_clip, primarias_clip)
+secundarias_clip <- sf::st_union(secundarias_clip)
+
+trilhas_clip <- st_erase(trilhas_buffer$geometry, patios$geometry)
+trilhas_clip <- st_erase(trilhas_clip, primarias_clip)
+trilhas_clip <- st_erase(trilhas_clip, secundarias_clip)
+trilhas_clip <- sf::st_union(trilhas_clip)
+
+primarias_clip <- sf::st_as_sf(primarias_clip)
+secundarias_clip <- sf::st_as_sf(secundarias_clip)
+trilhas_clip <- sf::st_as_sf(trilhas_clip)
+
+# calculando areas --------------------------------------------------------
+
+patios$area <- as.numeric(sf::st_area(patios))
+patios$soma_area <- sum(patios$area)/10000
+patios$media <- mean(patios$area)
+patios$desvio <- sd(patios$area)
+
+primarias_clip$area <- as.numeric(sf::st_area(primarias_clip)/10000)
+primarias_clip$soma_area <- sum(primarias_clip$area)
+
+secundarias_clip$area <- as.numeric(sf::st_area(secundarias_clip)/10000)
+secundarias_clip$soma_area <- sum(secundarias_clip$area)
+
+sec <- sf::st_union(secundarias_clip)
+
+trilhas_clip$area <- as.numeric(sf::st_area(trilhas_clip)/10000)
+trilhas_clip$soma_area <- sum(trilhas_clip$area)
+
+
+# unindo danos ------------------------------------------------------------
+
+patios_uniao <- sf::st_union(patios)
+
+# sf::write_sf(patios,'C:\\produtos\\patios_union.shp')
+
+danos <- sf::st_union(primarias_clip, secundarias_clip)
+danos <- sf::st_union(danos, trilhas_clip)
+danos <- sf::st_union(danos, patios)
+danos <- sf::st_union(danos)
+
+danos <- sf::st_as_sf(danos)
+
+# calculo de area de danos
+
+danos$area <- as.numeric(sf::st_area(danos)/10000)
+
+# salvando shp ------------------------------------------------------------
+
+sf::write_sf(primarias_clip,'C:\\produtos\\primarias_clip.shp')
+sf::write_sf(secundarias_clip,'C:\\produtos\\secundarias_clip.shp')
+sf::write_sf(trilhas_clip,'C:\\produtos\\trilhas_clip_b1.shp')
+sf::write_sf(patios,'C:\\produtos\\patios.shp')
+sf::write_sf(patios_uniao,'C:\\produtos\\patios_uniao.shp')
+sf::write_sf(danos,'C:\\produtos\\danos.shp')
+
+
+tabela_geral <- data.frame (Primaria = primarias_clip$area,
+            Secundaria = secundarias_clip$area,
+            Trilhas = trilhas_clip$area,
+            Patios_qtidade = length(patios$area),
+            Patios_area_total = patios$soma_area[1],
+            Patios_area_media = patios$media[1],
+            Patios_desvio = patios$desvio[1],
+            Total = danos$area)
+
+tabela_patios_individuais <- data.frame (Area = patios$area)
