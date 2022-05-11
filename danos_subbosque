@@ -1,0 +1,75 @@
+library(raster)
+library(sf)
+
+
+# carregando arquivo ------------------------------------------------------
+
+grade <- raster::raster('RDM.tif')
+
+# reclassificando ---------------------------------------------------------
+
+# todos os valores > minimo e <= maximo  reclassificar como dano
+
+minimo <- -1
+maximo <- 40
+
+tabela_reclassificacao <- c(-999, minimo, 0,
+                            minimo, maximo, 1,
+                            maximo, 999, 0)
+
+
+reclassificacao <- matrix(tabela_reclassificacao, ncol = 3, byrow = TRUE)
+grade_reclass <- raster::reclassify(grade, reclassificacao)
+
+# filtro de pixel majoritario ---------------------------------------------
+
+#dimensao do filtro em numero de celula. Por exemplo 3 x 3  coloque apenas o 3
+
+dimensao <- 3
+
+grade_majoritario <-raster::focal(grade_reclass, w = matrix(1,dimensao,dimensao),
+                                  fun=modal)
+
+# filtro sieve (crivo, agregamento) ---------------------------------------
+
+# qtidade_celulas = agrupamento minimo para que nao seja reclassificado
+
+qtidade_celulas <- 100
+
+grade_majoritario[grade_majoritario == 0] <- NA # NA obrigatorio
+
+grade_agrupamentos <- raster::clump(grade_majoritario, directions= 8)
+
+# Tabela de frequencia de clump
+
+frequencia <-raster::freq(grade_agrupamentos)
+frequencia <-as.data.frame(frequencia)
+
+# Clump ID's que serao removidos
+
+agrupamentos_excluidos <- frequencia$value[which(frequencia$count <= qtidade_celulas)]
+
+# Grade com valores de agrupamento superior a qtidade_celulas
+
+grade_Sieve <- grade_agrupamentos
+
+grade_Sieve[grade_agrupamentos %in% agrupamentos_excluidos] <- NA
+
+#exportar raster
+# raster::writeRaster(grade_Sieve, 'C:\\Produtos_QGis\\danos_aut_40.tif')
+
+# convertendo para shp ----------------------------------------------------
+
+poligono_Sieve <- raster::rasterToPolygons(x = grade_Sieve, na.rm = TRUE,
+                                           dissolve = TRUE)
+
+poligono_Sieve <- sf::st_as_sf(poligono_Sieve)
+poligono_Sieve <- st_union(poligono_Sieve)
+
+# calculando area ---------------------------------------------------------
+
+(poligono_Sieve_area <- as.numeric(sf::st_area(poligono_Sieve))/10000)
+
+# salvando shp ------------------------------------------------------------
+
+sf::write_sf(poligono_Sieve,'C:\\produtos\\danos_subbosque.shp')
