@@ -1,0 +1,14 @@
+library(sf)
+
+danos_visuais <- sf::read_sf('C:\\produtos\\danos_40.shp')
+danos_autom <- sf::read_sf('C:\\produtos\\danos.shp')
+
+danos_intersecao <- sf::st_intersection(danos_visuais, danos_autom)
+danos_intersecao <- st_collection_extract(danos_intersecao, "POLYGON")
+danos_intersecao <- sf::st_union(danos_intersecao)
+
+plot(danos_intersecao)
+
+(area_intersecao <- as.numeric(sf::st_area(danos_intersecao)/10000))
+
+sf::write_sf(danos_intersecao,'C:\\produtos\\danos_intersecao_40.shp')
